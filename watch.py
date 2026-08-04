@@ -20,6 +20,8 @@ def run_check(user_key: str, api_token: str, dry_run: bool = False) -> None:
     try:
         html = fetch_html()
         posts = parse_latest_posts(html)
+        if not posts:
+            raise RuntimeError("parsed zero posts — site markup may have changed")
     except Exception as exc:
         state["failure_count"] = state.get("failure_count", 0) + 1
         print(f"Fetch/parse failed ({state['failure_count']} in a row): {exc}", file=sys.stderr)
@@ -30,16 +32,17 @@ def run_check(user_key: str, api_token: str, dry_run: bool = False) -> None:
                 title="⚠️ SUP'COM watcher error",
                 priority=0,
             )
-        save_state(STATE_PATH, state)
+        if not dry_run:
+            save_state(STATE_PATH, state)
         return
 
     state["failure_count"] = 0
     last_seen_id = state["last_seen_id"]
 
     if last_seen_id == 0:
-        if posts:
-            state["last_seen_id"] = max(post.id for post in posts)
-        save_state(STATE_PATH, state)
+        state["last_seen_id"] = max(post.id for post in posts)
+        if not dry_run:
+            save_state(STATE_PATH, state)
         print(f"Bootstrapped state with last_seen_id={state['last_seen_id']}")
         return
 
@@ -89,7 +92,8 @@ def run_check(user_key: str, api_token: str, dry_run: bool = False) -> None:
 
         state["last_heartbeat_utc"] = now.isoformat()
 
-    save_state(STATE_PATH, state)
+    if not dry_run:
+        save_state(STATE_PATH, state)
 
 
 def send_test_notification(user_key: str, api_token: str, emergency: bool = False) -> None:
