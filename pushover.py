@@ -32,7 +32,13 @@ def send_pushover(
         payload["retry"] = retry if retry is not None else 60
         payload["expire"] = expire if expire is not None else 10800
 
-    response = requests.post(PUSHOVER_API_URL, data=payload, timeout=timeout)
+    try:
+        response = requests.post(PUSHOVER_API_URL, data=payload, timeout=timeout)
+    except requests.RequestException as exc:
+        # Callers only want to know "the notification failed" — give them a single
+        # exception type to catch instead of leaking raw requests exceptions.
+        raise PushoverError(f"Pushover request failed: {exc}") from exc
+
     if response.status_code != 200:
         raise PushoverError(f"Pushover API returned {response.status_code}: {response.text}")
 

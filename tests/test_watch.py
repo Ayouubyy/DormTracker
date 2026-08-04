@@ -1,10 +1,10 @@
 import sys
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import pytest
 
 import watch
+from pushover import PushoverError
 from state import load_state, save_state
 
 
@@ -193,7 +193,10 @@ def test_successful_run_resets_failure_count(tmp_path, monkeypatch):
 
 def test_empty_parse_result_is_treated_as_a_failure_not_all_clear(tmp_path, monkeypatch):
     state_path = tmp_path / "state.json"
-    save_state(state_path, {"last_seen_id": 138, "last_heartbeat_utc": None, "failure_count": 0})
+    # Recent heartbeat so this test isolates the "no all-clear on failure" behavior
+    # without the failure path's own degraded heartbeat also landing in `sent`.
+    recent_heartbeat = datetime.now(timezone.utc).isoformat()
+    save_state(state_path, {"last_seen_id": 138, "last_heartbeat_utc": recent_heartbeat, "failure_count": 0})
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
     monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")
     monkeypatch.setattr(watch, "parse_latest_posts", lambda html: [])
@@ -210,7 +213,9 @@ def test_empty_parse_result_is_treated_as_a_failure_not_all_clear(tmp_path, monk
 
 def test_third_consecutive_failure_sends_error_alert(tmp_path, monkeypatch):
     state_path = tmp_path / "state.json"
-    save_state(state_path, {"last_seen_id": 138, "last_heartbeat_utc": None, "failure_count": 2})
+    # Recent heartbeat so the only message we expect here is the one-time failure alert.
+    recent_heartbeat = datetime.now(timezone.utc).isoformat()
+    save_state(state_path, {"last_seen_id": 138, "last_heartbeat_utc": recent_heartbeat, "failure_count": 2})
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
 
     def boom():
@@ -223,8 +228,159 @@ def test_third_consecutive_failure_sends_error_alert(tmp_path, monkeypatch):
     watch.run_check("user", "token")
 
     assert len(sent) == 1
+    assert "failed 3 checks in a row" in sent[0]["message"]
     assert load_state(state_path)["failure_count"] == 3
     assert load_state(state_path)["last_seen_id"] == 138  # unchanged
+
+
+def test_failure_path_still_sends_a_degraded_heartbeat_after_the_one_time_alert(tmp_path, monkeypatch):
+    # The regression this guards: the failure branch used to `return` before ever
+    # reaching the heartbeat block, so past the single failure_count==3 alert a durable
+    # outage went permanently and undetectably silent. A silent phone must never be
+    # mistakable for "everything's fine".
+    state_path = tmp_path / "state.json"
+    old_heartbeat = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+    save_state(state_path, {"last_seen_id": 138, "last_heartbeat_utc": old_heartbeat, "failure_count": 7})
+    monkeypatch.setattr(watch, "STATE_PATH", state_path)
+
+    def boom():
+        raise RuntimeError("site is down")
+
+    monkeypatch.setattr(watch, "fetch_html", boom)
+    sent = []
+    monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: sent.append(k))
+
+    watch.run_check("user", "token")
+
+    # Well past failure_count==3, so the one-time alert is long gone — but a degraded
+    # heartbeat must still go out.
+    assert len(sent) == 1
+    assert "DEGRADED" in sent[0]["message"]
+    assert "8 consecutive failures" in sent[0]["message"]
+    assert load_state(state_path)["failure_count"] == 8
+    # And the heartbeat clock advanced, so it won't re-fire for another hour.
+    assert load_state(state_path)["last_heartbeat_utc"] != old_heartbeat
+
+
+def test_failure_path_does_not_spam_heartbeats_every_five_minutes(tmp_path, monkeypatch):
+    state_path = tmp_path / "state.json"
+    recent_heartbeat = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+    save_state(state_path, {"last_seen_id": 138, "last_heartbeat_utc": recent_heartbeat, "failure_count": 7})
+    monkeypatch.setattr(watch, "STATE_PATH", state_path)
+
+    def boom():
+        raise RuntimeError("site is down")
+
+    monkeypatch.setattr(watch, "fetch_html", boom)
+    sent = []
+    monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: sent.append(k))
+
+    watch.run_check("user", "token")
+
+    assert sent == []
+    assert load_state(state_path)["last_heartbeat_utc"] == recent_heartbeat
+
+
+def test_degraded_heartbeat_repeats_hourly_across_a_prolonged_outage(tmp_path, monkeypatch):
+    """Six hours of 5-minute failing checks must produce ~one message per hour, not one total."""
+    state_path = tmp_path / "state.json"
+    start = datetime.now(timezone.utc) - timedelta(hours=6)
+    save_state(state_path, {"last_seen_id": 138, "last_heartbeat_utc": start.isoformat(), "failure_count": 0})
+    monkeypatch.setattr(watch, "STATE_PATH", state_path)
+
+    def boom():
+        raise RuntimeError("site is down")
+
+    monkeypatch.setattr(watch, "fetch_html", boom)
+    sent = []
+    monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: sent.append(k))
+
+    # Simulate 72 consecutive failing 5-minute checks (6 hours) by advancing "now".
+    class FakeDatetime(datetime):
+        current = start
+
+        @classmethod
+        def now(cls, tz=None):
+            return cls.current
+
+    monkeypatch.setattr(watch, "datetime", FakeDatetime)
+
+    for tick in range(1, 73):
+        FakeDatetime.current = start + timedelta(minutes=5 * tick)
+        watch.run_check("user", "token")
+
+    degraded = [k for k in sent if "DEGRADED" in k["message"]]
+    # One degraded heartbeat per elapsed hour — never silent for longer than that, and
+    # never spamming on every 5-minute check either.
+    assert len(degraded) == 6, [k["message"] for k in sent]
+    # Plus exactly the one historical failure heads-up at failure_count == 3.
+    assert len([k for k in sent if "failed 3 checks in a row" in k["message"]]) == 1
+    assert load_state(state_path)["failure_count"] == 72
+
+
+def test_emergency_alert_still_sent_when_normal_ping_fails(tmp_path, monkeypatch):
+    # The regression this guards: the normal ping used to be sent first, unguarded, so a
+    # PushoverError there aborted run_check before the housing siren was ever attempted —
+    # losing the single most important message in the system to the least important one.
+    state_path = tmp_path / "state.json"
+    recent_heartbeat = datetime.now(timezone.utc).isoformat()
+    save_state(state_path, {"last_seen_id": 138, "last_heartbeat_utc": recent_heartbeat, "failure_count": 0})
+    monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")
+    monkeypatch.setattr(
+        watch, "parse_latest_posts",
+        lambda html: [
+            watch.Post(id=139, title="Avis hébergement 2026/2027", url="https://www.supcom.tn/details_actualite/139"),
+        ],
+    )
+
+    sent = []
+
+    def flaky_send(*args, **kwargs):
+        if kwargs.get("priority", 0) != 2:
+            raise PushoverError("normal ping exploded")
+        sent.append(kwargs)
+
+    monkeypatch.setattr(watch, "send_pushover", flaky_send)
+
+    watch.run_check("user", "token")
+
+    assert len(sent) == 1
+    assert sent[0]["priority"] == 2
+    assert "HOUSING POST DETECTED" in sent[0]["message"]
+    # The normal ping never landed, so don't advance past this post — the next check
+    # retries it rather than silently dropping the notification.
+    assert load_state(state_path)["last_seen_id"] == 138
+
+
+def test_normal_ping_still_sent_when_emergency_alert_fails(tmp_path, monkeypatch):
+    # Symmetric guard: neither send may be able to skip the other.
+    state_path = tmp_path / "state.json"
+    recent_heartbeat = datetime.now(timezone.utc).isoformat()
+    save_state(state_path, {"last_seen_id": 138, "last_heartbeat_utc": recent_heartbeat, "failure_count": 0})
+    monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")
+    monkeypatch.setattr(
+        watch, "parse_latest_posts",
+        lambda html: [
+            watch.Post(id=139, title="Avis hébergement 2026/2027", url="https://www.supcom.tn/details_actualite/139"),
+        ],
+    )
+
+    sent = []
+
+    def flaky_send(*args, **kwargs):
+        if kwargs.get("priority", 0) == 2:
+            raise PushoverError("siren exploded")
+        sent.append(kwargs)
+
+    monkeypatch.setattr(watch, "send_pushover", flaky_send)
+
+    watch.run_check("user", "token")
+
+    assert len(sent) == 1
+    assert sent[0]["priority"] == 0
+    assert load_state(state_path)["last_seen_id"] == 138
 
 
 def test_main_exits_with_error_when_credentials_missing(monkeypatch, capsys):
@@ -239,3 +395,27 @@ def test_main_exits_with_error_when_credentials_missing(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert "PUSHOVER_USER_KEY" in captured.err
     assert "PUSHOVER_API_TOKEN" in captured.err
+
+
+def test_main_rejects_emergency_without_test_notify(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["watch.py", "--emergency"])
+
+    with pytest.raises(SystemExit) as exc_info:
+        watch.main()
+
+    assert exc_info.value.code == 2
+    assert "--emergency" in capsys.readouterr().err
+
+
+def test_main_rejects_test_notify_combined_with_dry_run(monkeypatch, capsys):
+    # --dry-run promises nothing real is ever sent; --test-notify's whole job is to send
+    # something real. The combination used to quietly send a real push anyway.
+    monkeypatch.setattr(sys, "argv", ["watch.py", "--dry-run", "--test-notify"])
+    sent = []
+    monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: sent.append(k))
+
+    with pytest.raises(SystemExit) as exc_info:
+        watch.main()
+
+    assert exc_info.value.code == 2
+    assert sent == []

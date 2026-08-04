@@ -8,6 +8,14 @@ on:
 permissions:
   contents: write
 
+# Scheduled runs are best-effort and can fire late; without this, a delayed run and the
+# next one could overlap, both see the same post as new (two sirens for one post) and both
+# race to push state.json. Queue them instead of cancelling — a cancelled run could be
+# killed mid-alert.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -32,5 +40,9 @@ jobs:
           git config user.name "supcom-dorm-watcher-bot"
           git config user.email "actions@users.noreply.github.com"
           git add state.json
-          git diff --staged --quiet || git commit -m "Update watcher state [skip ci]"
+          git diff --staged --quiet && exit 0
+          git commit -m "Update watcher state [skip ci]"
+          # Rebase onto anything that landed while we were running, so a genuine race
+          # retries instead of failing the push and reddening the workflow.
+          git pull --rebase --autostash
           git push

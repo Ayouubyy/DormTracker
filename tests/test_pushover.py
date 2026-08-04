@@ -1,6 +1,7 @@
 from unittest.mock import patch, MagicMock
 
 import pytest
+import requests
 
 from pushover import send_pushover, PushoverError, PUSHOVER_API_URL
 
@@ -55,3 +56,22 @@ def test_send_pushover_raises_on_non_200(mock_post):
 
     with pytest.raises(PushoverError):
         send_pushover("user123", "token456", message="hello")
+
+
+@pytest.mark.parametrize(
+    "network_exc",
+    [
+        requests.ConnectionError("no route to host"),
+        requests.Timeout("timed out"),
+    ],
+)
+@patch("pushover.requests.post")
+def test_send_pushover_wraps_network_errors_in_pushover_error(mock_post, network_exc):
+    # Callers (watch.py) catch PushoverError to decide whether an alert got through;
+    # a raw requests exception would sail straight past those handlers.
+    mock_post.side_effect = network_exc
+
+    with pytest.raises(PushoverError) as exc_info:
+        send_pushover("user123", "token456", message="hello")
+
+    assert exc_info.value.__cause__ is network_exc
