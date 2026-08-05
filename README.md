@@ -4,6 +4,14 @@ Watches https://www.supcom.tn/ for new news posts and sends a Pushover alert the
 one appears — a loud, repeating "emergency" alert if the post looks housing/dorm-related,
 a quiet normal ping otherwise. Sends an hourly heartbeat so you know it's still running.
 
+It also separately watches
+[post #136](https://www.supcom.tn/details_actualite/136) (this year's registration
+announcement) for its "الرابط" placeholder turning into a real link — confirmed against
+last year's equivalent post, SUP'COM activates that existing placeholder rather than
+publishing a whole new post when registration (including housing) opens. See
+`link_watch.py`. **If SUP'COM's post id numbering changes next year, update
+`WATCHED_POST_URL` in `link_watch.py` to point at the new year's announcement post.**
+
 ## One-time setup
 
 1. **Create a Pushover account** at https://pushover.net and note your **User Key** (shown

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from scraper import Post, fetch_html, parse_latest_posts
 from keywords import is_housing_related
+from link_watch import WATCHED_POST_URL, fetch_watched_post_html, is_registration_link_active
 from state import load_state, save_state
 from pushover import PushoverError, send_pushover
 
@@ -94,6 +95,8 @@ def run_check(user_key: str, api_token: str, dry_run: bool = False) -> None:
         posts = parse_latest_posts(html)
         if not posts:
             raise RuntimeError("parsed zero posts — site markup may have changed")
+        watched_html = fetch_watched_post_html()
+        link_now_active = is_registration_link_active(watched_html)
     except Exception as exc:
         _handle_failure(state, now, exc, user_key, api_token, dry_run)
         if not dry_run:
@@ -102,6 +105,31 @@ def run_check(user_key: str, api_token: str, dry_run: bool = False) -> None:
 
     state["failure_count"] = 0
     last_seen_id = state["last_seen_id"]
+
+    # The registration link on post #136 going live IS the housing signal — confirmed
+    # against last year's equivalent post, which reused this same placeholder rather than
+    # publishing a brand new news item. This can fire before (or instead of) a new post.
+    was_active = state["registration_link_active"]
+    if was_active is None:
+        # First-ever observation of this field — seed silently, no alert.
+        state["registration_link_active"] = link_now_active
+    elif not was_active and link_now_active:
+        try:
+            _notify(
+                user_key, api_token, dry_run, "registration-link EMERGENCY alert",
+                message=f"SUP'COM's registration link just went LIVE:\n{WATCHED_POST_URL}",
+                title="🚨 SUP'COM REGISTRATION LINK LIVE",
+                priority=2,
+                sound="siren",
+                retry=30,
+                expire=10800,
+            )
+        except PushoverError as exc:
+            print(f"Registration-link EMERGENCY alert failed: {exc}", file=sys.stderr)
+            # Leave state["registration_link_active"] as False so the next check retries
+            # the alert instead of silently marking this "seen".
+        else:
+            state["registration_link_active"] = True
 
     if last_seen_id == 0:
         state["last_seen_id"] = max(post.id for post in posts)
@@ -163,7 +191,8 @@ def run_check(user_key: str, api_token: str, dry_run: bool = False) -> None:
             summary = f"found {len(new_posts)} new post(s) in this check, latest is #{latest_id}."
         else:
             summary = f"no new posts, latest is #{latest_id}."
-        heartbeat_message = f"✅ SUP'COM watcher OK — {summary}"
+        link_status = "registration link is LIVE" if state["registration_link_active"] else "registration link not yet active"
+        heartbeat_message = f"✅ SUP'COM watcher OK — {summary} {link_status}."
 
         try:
             _notify(

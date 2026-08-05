@@ -5,6 +5,8 @@ DEFAULT_STATE = {
     "last_seen_id": 0,
     "last_heartbeat_utc": None,
     "failure_count": 0,
+    # None = not yet observed (bootstrap on first check); True/False afterward.
+    "registration_link_active": None,
 }
 
 
