@@ -29,7 +29,7 @@ def send_pushover(
     if sound is not None:
         payload["sound"] = sound
     if priority == 2:
-        payload["retry"] = retry if retry is not None else 60
+        payload["retry"] = retry if retry is not None else 30
         payload["expire"] = expire if expire is not None else 10800
 
     try:

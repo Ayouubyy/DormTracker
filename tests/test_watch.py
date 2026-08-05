@@ -49,7 +49,7 @@ def test_new_housing_post_triggers_normal_and_emergency_alerts(tmp_path, monkeyp
     assert len(emergency_calls) == 1
     emergency = emergency_calls[0]
     assert emergency["priority"] == 2
-    assert emergency["retry"] == 60
+    assert emergency["retry"] == 30
     assert emergency["expire"] == 10800
 
     assert load_state(state_path)["last_seen_id"] == 139

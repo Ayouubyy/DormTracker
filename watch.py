@@ -128,7 +128,7 @@ def run_check(user_key: str, api_token: str, dry_run: bool = False) -> None:
                     title="🚨 SUP'COM HOUSING ALERT",
                     priority=2,
                     sound="siren",
-                    retry=60,
+                    retry=30,
                     expire=10800,
                 )
             except PushoverError as exc:
@@ -189,7 +189,7 @@ def send_test_notification(user_key: str, api_token: str, emergency: bool = Fals
             title="🚨 [TEST] SUP'COM watcher",
             priority=2,
             sound="siren",
-            retry=60,
+            retry=30,
             expire=10800,
         )
         print("Sent test EMERGENCY notification.")

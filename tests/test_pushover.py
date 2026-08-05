@@ -31,7 +31,7 @@ def test_send_pushover_emergency_priority_includes_retry_and_expire(mock_post):
 
     send_pushover(
         "user123", "token456", message="urgent", title="Alert",
-        priority=2, sound="siren", retry=60, expire=10800,
+        priority=2, sound="siren", retry=30, expire=10800,
     )
 
     mock_post.assert_called_once_with(
@@ -43,7 +43,7 @@ def test_send_pushover_emergency_priority_includes_retry_and_expire(mock_post):
             "priority": 2,
             "title": "Alert",
             "sound": "siren",
-            "retry": 60,
+            "retry": 30,
             "expire": 10800,
         },
         timeout=15,
