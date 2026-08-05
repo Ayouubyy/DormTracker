@@ -1,5 +1,8 @@
 name: SUP'COM dorm watcher
 
+# (Re-touched to force GitHub to (re-)register this schedule-triggered workflow — it
+# wasn't appearing in the Actions tab or workflow API after the original push.)
+
 on:
   schedule:
     - cron: "*/5 * * * *"
