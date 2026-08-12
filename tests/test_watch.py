@@ -11,6 +11,7 @@ from state import load_state, save_state
 def test_bootstrap_run_seeds_state_without_sending_alerts(tmp_path, monkeypatch):
     state_path = tmp_path / "state.json"
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)
     monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")
     monkeypatch.setattr(
         watch, "parse_latest_posts",
@@ -32,6 +33,7 @@ def test_new_housing_post_triggers_normal_and_emergency_alerts(tmp_path, monkeyp
     state_path = tmp_path / "state.json"
     save_state(state_path, {"last_seen_id": 138, "last_heartbeat_utc": None, "failure_count": 0})
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)
     monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")
     monkeypatch.setattr(
         watch, "parse_latest_posts",
@@ -66,6 +68,7 @@ def test_new_non_housing_post_only_sends_normal_alert(tmp_path, monkeypatch):
     recent_heartbeat = datetime.now(timezone.utc).isoformat()
     save_state(state_path, {"last_seen_id": 138, "last_heartbeat_utc": recent_heartbeat, "failure_count": 0})
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)
     monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")
     monkeypatch.setattr(
         watch, "parse_latest_posts",
@@ -90,6 +93,7 @@ def test_heartbeat_sent_when_hour_has_elapsed(tmp_path, monkeypatch):
     old_heartbeat = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
     save_state(state_path, {"last_seen_id": 139, "last_heartbeat_utc": old_heartbeat, "failure_count": 0})
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)
     monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")
     # The page still returns its normal (non-empty) listing; there's just nothing
     # newer than what we've already seen (id 139).
@@ -113,6 +117,7 @@ def test_heartbeat_not_sent_before_hour_elapses(tmp_path, monkeypatch):
     recent_heartbeat = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
     save_state(state_path, {"last_seen_id": 139, "last_heartbeat_utc": recent_heartbeat, "failure_count": 0})
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)
     monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")
     monkeypatch.setattr(
         watch, "parse_latest_posts",
@@ -132,6 +137,7 @@ def test_dry_run_never_calls_send_pushover(tmp_path, monkeypatch):
     state_path = tmp_path / "state.json"
     save_state(state_path, {"last_seen_id": 138, "last_heartbeat_utc": None, "failure_count": 0})
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)
     monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")
     monkeypatch.setattr(
         watch, "parse_latest_posts",
@@ -154,6 +160,7 @@ def test_dry_run_never_mutates_state_file(tmp_path, monkeypatch):
     # nothing changed, whatever fields the state file happens to carry.
     original_state = load_state(state_path)
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)
     monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")
     monkeypatch.setattr(
         watch, "parse_latest_posts",
@@ -175,6 +182,7 @@ def test_dry_run_bootstrap_never_mutates_state_file(tmp_path, monkeypatch):
     # verify it's guarded the same way as the main path.
     state_path = tmp_path / "state.json"
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)
     monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")
     monkeypatch.setattr(
         watch, "parse_latest_posts",
@@ -192,6 +200,7 @@ def test_successful_run_resets_failure_count(tmp_path, monkeypatch):
     state_path = tmp_path / "state.json"
     save_state(state_path, {"last_seen_id": 138, "last_heartbeat_utc": None, "failure_count": 2})
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)
     monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")
     monkeypatch.setattr(
         watch, "parse_latest_posts",
@@ -212,6 +221,7 @@ def test_empty_parse_result_is_treated_as_a_failure_not_all_clear(tmp_path, monk
     recent_heartbeat = datetime.now(timezone.utc).isoformat()
     save_state(state_path, {"last_seen_id": 138, "last_heartbeat_utc": recent_heartbeat, "failure_count": 0})
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)
     monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")
     monkeypatch.setattr(watch, "parse_latest_posts", lambda html: [])
     sent = []
@@ -231,6 +241,7 @@ def test_third_consecutive_failure_sends_error_alert(tmp_path, monkeypatch):
     recent_heartbeat = datetime.now(timezone.utc).isoformat()
     save_state(state_path, {"last_seen_id": 138, "last_heartbeat_utc": recent_heartbeat, "failure_count": 2})
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)
 
     def boom():
         raise RuntimeError("site is down")
@@ -256,6 +267,7 @@ def test_failure_path_still_sends_a_degraded_heartbeat_after_the_one_time_alert(
     old_heartbeat = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
     save_state(state_path, {"last_seen_id": 138, "last_heartbeat_utc": old_heartbeat, "failure_count": 7})
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)
 
     def boom():
         raise RuntimeError("site is down")
@@ -281,6 +293,7 @@ def test_failure_path_does_not_spam_heartbeats_every_five_minutes(tmp_path, monk
     recent_heartbeat = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
     save_state(state_path, {"last_seen_id": 138, "last_heartbeat_utc": recent_heartbeat, "failure_count": 7})
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)
 
     def boom():
         raise RuntimeError("site is down")
@@ -301,6 +314,7 @@ def test_degraded_heartbeat_repeats_hourly_across_a_prolonged_outage(tmp_path, m
     start = datetime.now(timezone.utc) - timedelta(hours=6)
     save_state(state_path, {"last_seen_id": 138, "last_heartbeat_utc": start.isoformat(), "failure_count": 0})
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)
 
     def boom():
         raise RuntimeError("site is down")
@@ -340,6 +354,7 @@ def test_emergency_alert_still_sent_when_normal_ping_fails(tmp_path, monkeypatch
     recent_heartbeat = datetime.now(timezone.utc).isoformat()
     save_state(state_path, {"last_seen_id": 138, "last_heartbeat_utc": recent_heartbeat, "failure_count": 0})
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)
     monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")
     monkeypatch.setattr(
         watch, "parse_latest_posts",
@@ -374,6 +389,7 @@ def test_normal_ping_still_sent_when_emergency_alert_fails(tmp_path, monkeypatch
     recent_heartbeat = datetime.now(timezone.utc).isoformat()
     save_state(state_path, {"last_seen_id": 138, "last_heartbeat_utc": recent_heartbeat, "failure_count": 0})
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)
     monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")
     monkeypatch.setattr(
         watch, "parse_latest_posts",
@@ -417,6 +433,7 @@ def test_registration_link_activation_triggers_emergency_alert(tmp_path, monkeyp
         "registration_link_active": False,
     })
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)
     monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")
     monkeypatch.setattr(
         watch, "parse_latest_posts",
@@ -445,6 +462,7 @@ def test_registration_link_already_active_does_not_resend_alert(tmp_path, monkey
         "registration_link_active": True,
     })
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)
     monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")
     monkeypatch.setattr(
         watch, "parse_latest_posts",
@@ -468,6 +486,7 @@ def test_registration_link_send_failure_leaves_state_false_for_retry(tmp_path, m
         "registration_link_active": False,
     })
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)
     monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")
     monkeypatch.setattr(
         watch, "parse_latest_posts",
@@ -495,6 +514,7 @@ def test_watched_post_fetch_failure_counts_as_a_failure(tmp_path, monkeypatch):
         "registration_link_active": False,
     })
     monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)
     monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")
     monkeypatch.setattr(
         watch, "parse_latest_posts",
@@ -517,6 +537,87 @@ def test_watched_post_fetch_failure_counts_as_a_failure(tmp_path, monkeypatch):
     assert load_state(state_path)["failure_count"] == 1
     assert load_state(state_path)["last_seen_id"] == 138
     assert load_state(state_path)["registration_link_active"] is False
+
+
+def test_supcom_site_up_flip_triggers_emergency_alert(tmp_path, monkeypatch):
+    state_path = tmp_path / "state.json"
+    recent_heartbeat = datetime.now(timezone.utc).isoformat()
+    save_state(state_path, {
+        "last_seen_id": 139, "last_heartbeat_utc": recent_heartbeat, "failure_count": 0,
+        "registration_link_active": False, "supcom_site_up": False, "inscription_site_up": False,
+    })
+    monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: False)  # inscription.tn stays down
+    monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")  # supcom.tn's fetch succeeds now
+    monkeypatch.setattr(
+        watch, "parse_latest_posts",
+        lambda html: [watch.Post(id=139, title="Post-Doc call", url="https://www.supcom.tn/details_actualite/139")],
+    )
+    monkeypatch.setattr(watch, "fetch_watched_post_html", lambda: _LINK_INACTIVE_HTML)
+    sent = []
+    monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: sent.append(k))
+
+    watch.run_check("user", "token")
+
+    assert len(sent) == 1
+    assert sent[0]["priority"] == 2
+    assert "supcom.tn" in sent[0]["message"]
+    assert load_state(state_path)["supcom_site_up"] is True
+
+
+def test_inscription_site_up_flip_triggers_emergency_alert(tmp_path, monkeypatch):
+    state_path = tmp_path / "state.json"
+    recent_heartbeat = datetime.now(timezone.utc).isoformat()
+    save_state(state_path, {
+        "last_seen_id": 139, "last_heartbeat_utc": recent_heartbeat, "failure_count": 0,
+        "registration_link_active": False, "supcom_site_up": True, "inscription_site_up": False,
+    })
+    monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: True)  # inscription.tn just came back
+    monkeypatch.setattr(watch, "fetch_html", lambda: "<html></html>")
+    monkeypatch.setattr(
+        watch, "parse_latest_posts",
+        lambda html: [watch.Post(id=139, title="Post-Doc call", url="https://www.supcom.tn/details_actualite/139")],
+    )
+    monkeypatch.setattr(watch, "fetch_watched_post_html", lambda: _LINK_INACTIVE_HTML)
+    sent = []
+    monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: sent.append(k))
+
+    watch.run_check("user", "token")
+
+    assert len(sent) == 1
+    assert sent[0]["priority"] == 2
+    assert "inscription.tn" in sent[0]["message"]
+    assert load_state(state_path)["inscription_site_up"] is True
+
+
+def test_inscription_check_still_runs_during_a_supcom_outage(tmp_path, monkeypatch):
+    # This is the entire point of checking it unconditionally: a supcom.tn outage must
+    # never block detecting inscription.tn coming back online in the meantime.
+    state_path = tmp_path / "state.json"
+    recent_heartbeat = datetime.now(timezone.utc).isoformat()
+    save_state(state_path, {
+        "last_seen_id": 138, "last_heartbeat_utc": recent_heartbeat, "failure_count": 5,
+        "registration_link_active": False, "supcom_site_up": False, "inscription_site_up": False,
+    })
+    monkeypatch.setattr(watch, "STATE_PATH", state_path)
+    monkeypatch.setattr(watch, "is_site_up", lambda url: True)  # inscription.tn is back
+
+    def boom():
+        raise RuntimeError("supcom.tn is still down")
+
+    monkeypatch.setattr(watch, "fetch_html", boom)
+    sent = []
+    monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: sent.append(k))
+
+    watch.run_check("user", "token")
+
+    inscription_alerts = [k for k in sent if "inscription.tn" in k.get("message", "")]
+    assert len(inscription_alerts) == 1
+    assert inscription_alerts[0]["priority"] == 2
+    assert load_state(state_path)["inscription_site_up"] is True
+    # supcom.tn's own state must still correctly reflect "still down" — unaffected.
+    assert load_state(state_path)["supcom_site_up"] is False
 
 
 def test_main_exits_with_error_when_credentials_missing(monkeypatch, capsys):

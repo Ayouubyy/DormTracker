@@ -12,7 +12,12 @@ publishing a whole new post when registration (including housing) opens. See
 `link_watch.py`. **If SUP'COM's post id numbering changes next year, update
 `WATCHED_POST_URL` in `link_watch.py` to point at the new year's announcement post.**
 
-## One-time setup
+It also watches whether **supcom.tn** and **inscription.tn** (Tunisia's national
+registration portal) are themselves currently reachable, and fires the same emergency
+alert the moment either one flips from down to up. See `site_status.py`. inscription.tn
+is checked independently of everything else in the pipeline, specifically so it still
+gets checked *during* a supcom.tn outage — the whole point is catching either site
+coming back online in the meantime.
 
 1. **Create a Pushover account** at https://pushover.net and note your **User Key** (shown
    on your dashboard after login).

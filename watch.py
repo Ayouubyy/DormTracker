@@ -4,9 +4,10 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from scraper import Post, fetch_html, parse_latest_posts
+from scraper import Post, SUPCOM_URL, fetch_html, parse_latest_posts
 from keywords import is_housing_related
 from link_watch import WATCHED_POST_URL, fetch_watched_post_html, is_registration_link_active
+from site_status import INSCRIPTION_URL, is_site_up
 from state import load_state, save_state
 from pushover import PushoverError, send_pushover
 
@@ -86,9 +87,59 @@ def _handle_failure(
             state["last_heartbeat_utc"] = now.isoformat()
 
 
+def _check_flip_to_active(
+    state: dict,
+    key: str,
+    now_active: bool,
+    user_key: str,
+    api_token: str,
+    dry_run: bool,
+    alert_title: str,
+    alert_message: str,
+) -> None:
+    """Bootstrap a tri-state (None/True/False) flag silently, then fire the emergency
+    siren exactly once on a False -> True transition — used for every "this specific
+    signal just turned on" detector this project has (the registration link, and
+    whether each site is currently reachable).
+
+    Leaves the flag False on a failed send, so the next check retries the alert instead
+    of silently marking the event "seen" and going quiet on it.
+    """
+    was_active = state[key]
+    if was_active is None:
+        state[key] = now_active
+        return
+    if was_active or not now_active:
+        return
+
+    try:
+        _notify(
+            user_key, api_token, dry_run, f"{key} EMERGENCY alert",
+            message=alert_message,
+            title=alert_title,
+            priority=2,
+            sound="siren",
+            retry=30,
+            expire=10800,
+        )
+    except PushoverError as exc:
+        print(f"{key} EMERGENCY alert failed: {exc}", file=sys.stderr)
+    else:
+        state[key] = True
+
+
 def run_check(user_key: str, api_token: str, dry_run: bool = False) -> None:
     state = load_state(STATE_PATH)
     now = datetime.now(timezone.utc)
+
+    # inscription.tn (Tunisia's national registration portal) is checked unconditionally,
+    # independent of everything below — it must still get checked DURING a supcom.tn
+    # outage, since detecting either site coming back online is exactly the point.
+    _check_flip_to_active(
+        state, "inscription_site_up", is_site_up(INSCRIPTION_URL), user_key, api_token, dry_run,
+        alert_title="🚨 INSCRIPTION.TN IS BACK UP",
+        alert_message=f"Tunisia's national registration portal is back online:\n{INSCRIPTION_URL}",
+    )
 
     try:
         html = fetch_html()
@@ -98,10 +149,20 @@ def run_check(user_key: str, api_token: str, dry_run: bool = False) -> None:
         watched_html = fetch_watched_post_html()
         link_now_active = is_registration_link_active(watched_html)
     except Exception as exc:
+        # A failed fetch can only ever mean "still/now down" — seed the field on first
+        # observation, but there's no "flip to active" case to alert on here.
+        if state["supcom_site_up"] is None:
+            state["supcom_site_up"] = False
         _handle_failure(state, now, exc, user_key, api_token, dry_run)
         if not dry_run:
             save_state(STATE_PATH, state)
         return
+
+    _check_flip_to_active(
+        state, "supcom_site_up", True, user_key, api_token, dry_run,
+        alert_title="🚨 SUP'COM SITE IS BACK UP",
+        alert_message=f"supcom.tn is responding normally again:\n{SUPCOM_URL}",
+    )
 
     state["failure_count"] = 0
     last_seen_id = state["last_seen_id"]
@@ -109,27 +170,11 @@ def run_check(user_key: str, api_token: str, dry_run: bool = False) -> None:
     # The registration link on post #136 going live IS the housing signal — confirmed
     # against last year's equivalent post, which reused this same placeholder rather than
     # publishing a brand new news item. This can fire before (or instead of) a new post.
-    was_active = state["registration_link_active"]
-    if was_active is None:
-        # First-ever observation of this field — seed silently, no alert.
-        state["registration_link_active"] = link_now_active
-    elif not was_active and link_now_active:
-        try:
-            _notify(
-                user_key, api_token, dry_run, "registration-link EMERGENCY alert",
-                message=f"SUP'COM's registration link just went LIVE:\n{WATCHED_POST_URL}",
-                title="🚨 SUP'COM REGISTRATION LINK LIVE",
-                priority=2,
-                sound="siren",
-                retry=30,
-                expire=10800,
-            )
-        except PushoverError as exc:
-            print(f"Registration-link EMERGENCY alert failed: {exc}", file=sys.stderr)
-            # Leave state["registration_link_active"] as False so the next check retries
-            # the alert instead of silently marking this "seen".
-        else:
-            state["registration_link_active"] = True
+    _check_flip_to_active(
+        state, "registration_link_active", link_now_active, user_key, api_token, dry_run,
+        alert_title="🚨 SUP'COM REGISTRATION LINK LIVE",
+        alert_message=f"SUP'COM's registration link just went LIVE:\n{WATCHED_POST_URL}",
+    )
 
     if last_seen_id == 0:
         state["last_seen_id"] = max(post.id for post in posts)
@@ -191,8 +236,12 @@ def run_check(user_key: str, api_token: str, dry_run: bool = False) -> None:
             summary = f"found {len(new_posts)} new post(s) in this check, latest is #{latest_id}."
         else:
             summary = f"no new posts, latest is #{latest_id}."
-        link_status = "registration link is LIVE" if state["registration_link_active"] else "registration link not yet active"
-        heartbeat_message = f"✅ SUP'COM watcher OK — {summary} {link_status}."
+        link_status = "registration link LIVE" if state["registration_link_active"] else "link not yet active"
+        supcom_status = "supcom.tn UP" if state["supcom_site_up"] else "supcom.tn DOWN"
+        inscription_status = "inscription.tn UP" if state["inscription_site_up"] else "inscription.tn DOWN"
+        heartbeat_message = (
+            f"✅ SUP'COM watcher OK — {summary} {link_status}. {supcom_status}, {inscription_status}."
+        )
 
         try:
             _notify(

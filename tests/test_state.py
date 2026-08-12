@@ -18,6 +18,8 @@ def test_save_then_load_round_trips(tmp_path):
         "last_heartbeat_utc": "2026-08-04T12:00:00+00:00",
         "failure_count": 0,
         "registration_link_active": True,
+        "supcom_site_up": True,
+        "inscription_site_up": False,
     }
 
     save_state(path, original)
@@ -37,4 +39,6 @@ def test_load_state_fills_missing_keys_with_defaults(tmp_path):
         "last_heartbeat_utc": None,
         "failure_count": 0,
         "registration_link_active": None,
+        "supcom_site_up": None,
+        "inscription_site_up": None,
     }

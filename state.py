@@ -7,6 +7,8 @@ DEFAULT_STATE = {
     "failure_count": 0,
     # None = not yet observed (bootstrap on first check); True/False afterward.
     "registration_link_active": None,
+    "supcom_site_up": None,
+    "inscription_site_up": None,
 }
 
 
