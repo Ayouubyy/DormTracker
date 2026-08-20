@@ -284,7 +284,19 @@ def send_test_notification(user_key: str, api_token: str, emergency: bool = Fals
         print("Sent test normal notification.")
 
 
+def _ensure_utf8_output() -> None:
+    """Windows' default console codepage can't encode the emoji in our messages (✅ 🚨
+    ⚠️ 📰) — reconfigure to UTF-8 so a local run never crashes mid-check. A no-op on
+    Linux (already UTF-8) and harmless if the stream doesn't support reconfiguring
+    (e.g. under pytest's output capture).
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
+
+
 def main() -> None:
+    _ensure_utf8_output()
     parser = argparse.ArgumentParser(description="SUP'COM dorm announcement watcher")
     parser.add_argument("--dry-run", action="store_true", help="Run the real check but only print what would be sent")
     parser.add_argument("--test-notify", action="store_true", help="Send one real fake test notification and exit")
