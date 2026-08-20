@@ -17,7 +17,7 @@ def test_bootstrap_run_seeds_state_without_sending_alerts(tmp_path, monkeypatch)
         watch, "parse_latest_posts",
         lambda html: [watch.Post(id=139, title="Post-Doc call", url="https://www.supcom.tn/details_actualite/139")],
     )
-    monkeypatch.setattr(watch, "fetch_watched_post_html", lambda: "<html></html>")
+    monkeypatch.setattr(watch, "is_any_registration_link_active", lambda: False)
     sent = []
     monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: sent.append((a, k)))
 
@@ -41,7 +41,7 @@ def test_new_housing_post_triggers_normal_and_emergency_alerts(tmp_path, monkeyp
             watch.Post(id=139, title="Avis hébergement 2026/2027", url="https://www.supcom.tn/details_actualite/139"),
         ],
     )
-    monkeypatch.setattr(watch, "fetch_watched_post_html", lambda: "<html></html>")
+    monkeypatch.setattr(watch, "is_any_registration_link_active", lambda: False)
     sent = []
     monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: sent.append(k))
 
@@ -76,7 +76,7 @@ def test_new_non_housing_post_only_sends_normal_alert(tmp_path, monkeypatch):
             watch.Post(id=139, title="Fête de fin d'année", url="https://www.supcom.tn/details_actualite/139"),
         ],
     )
-    monkeypatch.setattr(watch, "fetch_watched_post_html", lambda: "<html></html>")
+    monkeypatch.setattr(watch, "is_any_registration_link_active", lambda: False)
     sent = []
     monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: sent.append(k))
 
@@ -101,7 +101,7 @@ def test_heartbeat_sent_when_hour_has_elapsed(tmp_path, monkeypatch):
         watch, "parse_latest_posts",
         lambda html: [watch.Post(id=139, title="Post-Doc call", url="https://www.supcom.tn/details_actualite/139")],
     )
-    monkeypatch.setattr(watch, "fetch_watched_post_html", lambda: "<html></html>")
+    monkeypatch.setattr(watch, "is_any_registration_link_active", lambda: False)
     sent = []
     monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: sent.append(k))
 
@@ -123,7 +123,7 @@ def test_heartbeat_not_sent_before_hour_elapses(tmp_path, monkeypatch):
         watch, "parse_latest_posts",
         lambda html: [watch.Post(id=139, title="Post-Doc call", url="https://www.supcom.tn/details_actualite/139")],
     )
-    monkeypatch.setattr(watch, "fetch_watched_post_html", lambda: "<html></html>")
+    monkeypatch.setattr(watch, "is_any_registration_link_active", lambda: False)
     sent = []
     monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: sent.append(k))
 
@@ -143,7 +143,7 @@ def test_dry_run_never_calls_send_pushover(tmp_path, monkeypatch):
         watch, "parse_latest_posts",
         lambda html: [watch.Post(id=139, title="Avis hébergement", url="https://www.supcom.tn/details_actualite/139")],
     )
-    monkeypatch.setattr(watch, "fetch_watched_post_html", lambda: "<html></html>")
+    monkeypatch.setattr(watch, "is_any_registration_link_active", lambda: False)
     called = []
     monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: called.append(k))
 
@@ -169,7 +169,7 @@ def test_dry_run_never_mutates_state_file(tmp_path, monkeypatch):
         # the very next real cron run still sees this post as new.
         lambda html: [watch.Post(id=139, title="Avis hébergement", url="https://www.supcom.tn/details_actualite/139")],
     )
-    monkeypatch.setattr(watch, "fetch_watched_post_html", lambda: "<html></html>")
+    monkeypatch.setattr(watch, "is_any_registration_link_active", lambda: False)
     monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: None)
 
     watch.run_check("user", "token", dry_run=True)
@@ -188,7 +188,7 @@ def test_dry_run_bootstrap_never_mutates_state_file(tmp_path, monkeypatch):
         watch, "parse_latest_posts",
         lambda html: [watch.Post(id=139, title="Post-Doc call", url="https://www.supcom.tn/details_actualite/139")],
     )
-    monkeypatch.setattr(watch, "fetch_watched_post_html", lambda: "<html></html>")
+    monkeypatch.setattr(watch, "is_any_registration_link_active", lambda: False)
     monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: None)
 
     watch.run_check("user", "token", dry_run=True)
@@ -206,7 +206,7 @@ def test_successful_run_resets_failure_count(tmp_path, monkeypatch):
         watch, "parse_latest_posts",
         lambda html: [watch.Post(id=139, title="Post-Doc call", url="https://www.supcom.tn/details_actualite/139")],
     )
-    monkeypatch.setattr(watch, "fetch_watched_post_html", lambda: "<html></html>")
+    monkeypatch.setattr(watch, "is_any_registration_link_active", lambda: False)
     monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: None)
 
     watch.run_check("user", "token")
@@ -362,7 +362,7 @@ def test_emergency_alert_still_sent_when_normal_ping_fails(tmp_path, monkeypatch
             watch.Post(id=139, title="Avis hébergement 2026/2027", url="https://www.supcom.tn/details_actualite/139"),
         ],
     )
-    monkeypatch.setattr(watch, "fetch_watched_post_html", lambda: "<html></html>")
+    monkeypatch.setattr(watch, "is_any_registration_link_active", lambda: False)
 
     sent = []
 
@@ -397,7 +397,7 @@ def test_normal_ping_still_sent_when_emergency_alert_fails(tmp_path, monkeypatch
             watch.Post(id=139, title="Avis hébergement 2026/2027", url="https://www.supcom.tn/details_actualite/139"),
         ],
     )
-    monkeypatch.setattr(watch, "fetch_watched_post_html", lambda: "<html></html>")
+    monkeypatch.setattr(watch, "is_any_registration_link_active", lambda: False)
 
     sent = []
 
@@ -415,16 +415,6 @@ def test_normal_ping_still_sent_when_emergency_alert_fails(tmp_path, monkeypatch
     assert load_state(state_path)["last_seen_id"] == 138
 
 
-# Real markup captured from https://www.supcom.tn/details_actualite/136 (placeholder,
-# not yet open) and .../90 (last year's equivalent post, after registration opened) —
-# see link_watch.py and tests/test_link_watch.py for the full detection logic these
-# exercise end-to-end through run_check.
-_LINK_INACTIVE_HTML = "(مع احترام مواعيد التسجيل : الرابط)."
-_LINK_ACTIVE_HTML = (
-    '(مع احترام مواعيد التسجيل : <a href="https://edx.supcom.tn/public/short.faces?l=X">الرابط</a>).'
-)
-
-
 def test_registration_link_activation_triggers_emergency_alert(tmp_path, monkeypatch):
     state_path = tmp_path / "state.json"
     recent_heartbeat = datetime.now(timezone.utc).isoformat()
@@ -439,7 +429,7 @@ def test_registration_link_activation_triggers_emergency_alert(tmp_path, monkeyp
         watch, "parse_latest_posts",
         lambda html: [watch.Post(id=139, title="Post-Doc call", url="https://www.supcom.tn/details_actualite/139")],
     )
-    monkeypatch.setattr(watch, "fetch_watched_post_html", lambda: _LINK_ACTIVE_HTML)
+    monkeypatch.setattr(watch, "is_any_registration_link_active", lambda: True)
     sent = []
     monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: sent.append(k))
 
@@ -468,7 +458,7 @@ def test_registration_link_already_active_does_not_resend_alert(tmp_path, monkey
         watch, "parse_latest_posts",
         lambda html: [watch.Post(id=139, title="Post-Doc call", url="https://www.supcom.tn/details_actualite/139")],
     )
-    monkeypatch.setattr(watch, "fetch_watched_post_html", lambda: _LINK_ACTIVE_HTML)
+    monkeypatch.setattr(watch, "is_any_registration_link_active", lambda: True)
     sent = []
     monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: sent.append(k))
 
@@ -492,7 +482,7 @@ def test_registration_link_send_failure_leaves_state_false_for_retry(tmp_path, m
         watch, "parse_latest_posts",
         lambda html: [watch.Post(id=139, title="Post-Doc call", url="https://www.supcom.tn/details_actualite/139")],
     )
-    monkeypatch.setattr(watch, "fetch_watched_post_html", lambda: _LINK_ACTIVE_HTML)
+    monkeypatch.setattr(watch, "is_any_registration_link_active", lambda: True)
 
     def boom_send(*args, **kwargs):
         raise PushoverError("siren exploded")
@@ -524,7 +514,7 @@ def test_watched_post_fetch_failure_counts_as_a_failure(tmp_path, monkeypatch):
     def boom():
         raise RuntimeError("watched post page is down")
 
-    monkeypatch.setattr(watch, "fetch_watched_post_html", boom)
+    monkeypatch.setattr(watch, "is_any_registration_link_active", boom)
     sent = []
     monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: sent.append(k))
 
@@ -553,7 +543,7 @@ def test_supcom_site_up_flip_triggers_emergency_alert(tmp_path, monkeypatch):
         watch, "parse_latest_posts",
         lambda html: [watch.Post(id=139, title="Post-Doc call", url="https://www.supcom.tn/details_actualite/139")],
     )
-    monkeypatch.setattr(watch, "fetch_watched_post_html", lambda: _LINK_INACTIVE_HTML)
+    monkeypatch.setattr(watch, "is_any_registration_link_active", lambda: False)
     sent = []
     monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: sent.append(k))
 
@@ -579,7 +569,7 @@ def test_inscription_site_up_flip_triggers_emergency_alert(tmp_path, monkeypatch
         watch, "parse_latest_posts",
         lambda html: [watch.Post(id=139, title="Post-Doc call", url="https://www.supcom.tn/details_actualite/139")],
     )
-    monkeypatch.setattr(watch, "fetch_watched_post_html", lambda: _LINK_INACTIVE_HTML)
+    monkeypatch.setattr(watch, "is_any_registration_link_active", lambda: False)
     sent = []
     monkeypatch.setattr(watch, "send_pushover", lambda *a, **k: sent.append(k))
 

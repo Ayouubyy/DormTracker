@@ -6,7 +6,7 @@ from pathlib import Path
 
 from scraper import Post, SUPCOM_URL, fetch_html, parse_latest_posts
 from keywords import is_housing_related
-from link_watch import WATCHED_POST_URL, fetch_watched_post_html, is_registration_link_active
+from link_watch import WATCHED_POSTS, is_any_registration_link_active
 from site_status import INSCRIPTION_URL, is_site_up
 from state import load_state, save_state
 from pushover import PushoverError, send_pushover
@@ -146,8 +146,7 @@ def run_check(user_key: str, api_token: str, dry_run: bool = False) -> None:
         posts = parse_latest_posts(html)
         if not posts:
             raise RuntimeError("parsed zero posts — site markup may have changed")
-        watched_html = fetch_watched_post_html()
-        link_now_active = is_registration_link_active(watched_html)
+        link_now_active = is_any_registration_link_active()
     except Exception as exc:
         # A failed fetch can only ever mean "still/now down" — seed the field on first
         # observation, but there's no "flip to active" case to alert on here.
@@ -167,13 +166,17 @@ def run_check(user_key: str, api_token: str, dry_run: bool = False) -> None:
     state["failure_count"] = 0
     last_seen_id = state["last_seen_id"]
 
-    # The registration link on post #136 going live IS the housing signal — confirmed
-    # against last year's equivalent post, which reused this same placeholder rather than
-    # publishing a brand new news item. This can fire before (or instead of) a new post.
+    # The registration link on post #136 (Arabic) or #138 (French) going live IS the
+    # housing signal — confirmed against last year's equivalent post, which reused this
+    # same placeholder rather than publishing a brand new news item. This can fire before
+    # (or instead of) a new post, and either language version activating counts.
     _check_flip_to_active(
         state, "registration_link_active", link_now_active, user_key, api_token, dry_run,
         alert_title="🚨 SUP'COM REGISTRATION LINK LIVE",
-        alert_message=f"SUP'COM's registration link just went LIVE:\n{WATCHED_POST_URL}",
+        alert_message=(
+            "SUP'COM's registration link just went LIVE:\n"
+            + "\n".join(post["url"] for post in WATCHED_POSTS)
+        ),
     )
 
     if last_seen_id == 0:

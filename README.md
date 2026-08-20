@@ -4,13 +4,16 @@ Watches https://www.supcom.tn/ for new news posts and sends a Pushover alert the
 one appears — a loud, repeating "emergency" alert if the post looks housing/dorm-related,
 a quiet normal ping otherwise. Sends an hourly heartbeat so you know it's still running.
 
-It also separately watches
-[post #136](https://www.supcom.tn/details_actualite/136) (this year's registration
-announcement) for its "الرابط" placeholder turning into a real link — confirmed against
-last year's equivalent post, SUP'COM activates that existing placeholder rather than
-publishing a whole new post when registration (including housing) opens. See
-`link_watch.py`. **If SUP'COM's post id numbering changes next year, update
-`WATCHED_POST_URL` in `link_watch.py` to point at the new year's announcement post.**
+It also separately watches SUP'COM's registration announcement — published as **two**
+posts, one per language,
+[#136 (Arabic)](https://www.supcom.tn/details_actualite/136) and
+[#138 (French)](https://www.supcom.tn/details_actualite/138) — for their "الرابط"/"lien"
+placeholder turning into a real link. Confirmed against last year's equivalent post,
+SUP'COM activates that existing placeholder rather than publishing a whole new post when
+registration (including housing) opens; either language version flipping counts as the
+same signal. See `link_watch.py`. **If SUP'COM's post id numbering changes next year,
+update the URLs in `WATCHED_POSTS` in `link_watch.py` to point at the new year's
+announcement posts.**
 
 It also watches whether **supcom.tn** and **inscription.tn** (Tunisia's national
 registration portal) are themselves currently reachable, and fires the same emergency
